@@ -18,21 +18,42 @@
 #define PIN_PUSH_fwd    10
 #define PIN_LED_x       11
 
+
+uint16_t rc_raw[6];
+int16_t rc[6];
+uint16_t now_ms;
+
 uint8_t failcount =0;
 uint8_t rcfail = 1;
+uint8_t activated = 0;
 
 int16_t ML_fwd = 0, ML_bck = 0, MR_fwd = 0, MR_bck = 0;
 int16_t SPIN_cw = 0, SPIN_ccw = 0, DIG_down = 0, DIG_up = 0, PUSH_fwd = 0, LED_x = 0;
 
+#define ZERO_OUTPUT  \
+  ML_fwd = 0;        \
+  ML_bck = 0;        \
+  MR_fwd = 0;        \
+  MR_bck = 0;        \
+  SPIN_cw = 0;       \
+  SPIN_ccw = 0;      \
+  DIG_down = 0;      \
+  DIG_up = 0;        \
+  PUSH_fwd = 0;      \
+  LED_x = 0;
+  
 void setup()
 {
+  /* Port C is for input and internal pull-up enabled */
   DDRC = 0x00;
   PINC = 0xff;
   PORTC = 0xff;
 
+  /* Enable interrupts from 5 pins of port C which are connected with RC */
   PCMSK1 = B11111;
   PCICR = B00000010;
   
+  /* Disable internal pull-up for output pins */
   digitalWrite(PIN_ML_fwd, LOW);
   digitalWrite(PIN_ML_bck, LOW);
   digitalWrite(PIN_MR_fwd, LOW);
@@ -58,9 +79,7 @@ void setup()
   Serial.begin(115200);
 }
 
-uint16_t rc_raw[6];
-int16_t rc[6];
-uint16_t now_ms;
+  static uint8_t acttick = 0;
 
 void loop()
 {
@@ -79,6 +98,10 @@ void loop()
     Serial.print(failcount);
     Serial.print("-");
     Serial.print(rcfail);
+    Serial.print("-");
+    Serial.print(activated);
+    Serial.print("-");
+    Serial.print(acttick);
     Serial.print("-");
     Serial.print(" ML+:");
     Serial.print(ML_fwd);
@@ -134,7 +157,10 @@ void computerc()
       if (failcount < 50)
         failcount ++;
       else
+      {
         rcfail = 1;
+        activated = 0;
+      }
     }
     else
     {
@@ -160,6 +186,33 @@ void computerc()
 void control()
 {
   static uint8_t led_can_switch;
+  
+  if (rcfail)
+  {
+    ZERO_OUTPUT;
+    delay(5);
+    return;
+  }
+  
+  /* Activation decision */
+  if (! activated)
+  {
+    ZERO_OUTPUT;
+
+    if ((rc[THROTTLE] >= -15) && (rc[THROTTLE] <= 15))
+      acttick ++;
+    else
+      acttick = 0;
+
+    if (acttick >= 200)
+    {
+      acttick = 0;
+      activated = 1;
+      LED_x = 0xff; /* it's good to light up LED when activated */
+    }
+    delay(10);
+    return;
+  }
   
   /* STEP1: Main motors with steering control */
   if (rc[THROTTLE] >= 0)
@@ -238,7 +291,7 @@ void control()
           if (LED_x > 0)
             LED_x = 0;
           else
-            LED_x = 255;
+            LED_x = 0xff;
           led_can_switch = 0;
         }
       }
