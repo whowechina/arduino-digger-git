@@ -346,7 +346,7 @@ void finetune()
 
 #define PWM_TICK           \
   pwm_timer ++;            \
-  if (pwm_timer >= 125)    \
+  if (pwm_timer >= 115)    \
     pwm_timer = 0;
   
 #define PWM_ZERO(pin, number)      \
@@ -354,9 +354,9 @@ void finetune()
     digitalWrite(pin, LOW); 
 
 #define PWM_NONZERO(pin, number)      \
-  if ((number) > pwm_timer)          \
-    digitalWrite(pin, HIGH);       \
-  else                             \
+  if ((number) > (pwm_timer) + 10)    \
+    digitalWrite(pin, HIGH);          \
+  else                                \
     digitalWrite(pin, LOW); 
 
 void outputpwm()
