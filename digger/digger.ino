@@ -5,7 +5,7 @@
 #define YAW       3
 #define MODE      4
 
-#define SPEED_THRESHOLD  40
+#define SPEED_THRESHOLD  70
 
 #define PIN_ML_fwd       2
 #define PIN_ML_bck       3
@@ -18,9 +18,8 @@
 #define PIN_PUSH_fwd    10
 #define PIN_LED_x       11
 
-
-uint16_t rc_raw[6];
-int16_t rc[6];
+uint16_t rc_raw[8];
+int16_t rc[8];
 uint16_t now_ms;
 
 uint8_t failcount =0;
@@ -124,15 +123,15 @@ void loop()
     Serial.print(" LED:");
     Serial.print(LED_x);
     Serial.print("\t");
-    Serial.print(rc[0]);
+    Serial.print(rc[THROTTLE]);
     Serial.print(":");
-    Serial.print(rc[1]);
+    Serial.print(rc[ROLL]);
     Serial.print(":");
-    Serial.print(rc[2]);
+    Serial.print(rc[PITCH]);
     Serial.print(":");
-    Serial.print(rc[3]);
+    Serial.print(rc[YAW]);
     Serial.print(":");
-    Serial.print(rc[4]);
+    Serial.print(rc[MODE]);
     Serial.println();
   }
 }
@@ -148,10 +147,10 @@ void computerc()
   if (now_ms - old_ms > 20)
   {
     old_ms = now_ms;
-    if ((oldrc[1] == rc_raw[1]) &&
-        (oldrc[2] == rc_raw[2]) &&
-        (oldrc[3] == rc_raw[3]) &&
-        (oldrc[4] == rc_raw[4]))
+    if ((oldrc[ROLL] == rc_raw[ROLL]) &&
+        (oldrc[PITCH] == rc_raw[PITCH]) &&
+        (oldrc[YAW] == rc_raw[YAW]) &&
+        (oldrc[MODE] == rc_raw[MODE]))
     {
       /* All channels freeze */
       if (failcount < 50)
@@ -170,10 +169,10 @@ void computerc()
       else
         rcfail = 0;
     }
-    oldrc[1] = rc_raw[1];
-    oldrc[2] = rc_raw[2];
-    oldrc[3] = rc_raw[3];
-    oldrc[4] = rc_raw[4];
+    oldrc[ROLL] = rc_raw[ROLL];
+    oldrc[PITCH] = rc_raw[PITCH];
+    oldrc[YAW] = rc_raw[YAW];
+    oldrc[MODE] = rc_raw[MODE];
   }
 
   RX_COMPUTE(THROTTLE);
@@ -199,7 +198,7 @@ void control()
   {
     ZERO_OUTPUT;
 
-    if ((rc[THROTTLE] >= -15) && (rc[THROTTLE] <= 15))
+    if ((rc[THROTTLE] >= -20) && (rc[THROTTLE] <= 20))
       acttick ++;
     else
       acttick = 0;
@@ -346,7 +345,7 @@ void finetune()
 
 #define PWM_TICK           \
   pwm_timer ++;            \
-  if (pwm_timer >= 115)    \
+  if (pwm_timer >= 120)    \
     pwm_timer = 0;
   
 #define PWM_ZERO(pin, number)      \
@@ -354,7 +353,7 @@ void finetune()
     digitalWrite(pin, LOW); 
 
 #define PWM_NONZERO(pin, number)      \
-  if ((number) > (pwm_timer) + 10)    \
+  if ((number) > (pwm_timer))    \
     digitalWrite(pin, HIGH);          \
   else                                \
     digitalWrite(pin, LOW); 
