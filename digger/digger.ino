@@ -5,7 +5,7 @@
 #define YAW       3
 #define MODE      4
 
-#define SPEED_THRESHOLD  70
+#define SPEED_THRESHOLD  60
 
 #define PIN_ML_fwd       2
 #define PIN_ML_bck       3
@@ -25,6 +25,7 @@ uint16_t now_ms;
 uint8_t failcount =0;
 uint8_t rcfail = 1;
 uint8_t activated = 0;
+uint8_t controlmode = 0;
 
 int16_t ML_fwd = 0, ML_bck = 0, MR_fwd = 0, MR_bck = 0;
 int16_t SPIN_cw = 0, SPIN_ccw = 0, DIG_down = 0, DIG_up = 0, PUSH_fwd = 0, LED_x = 0;
@@ -182,38 +183,9 @@ void computerc()
   RX_COMPUTE(MODE);
 }
 
-void control()
+void controlmode0()
 {
-  static uint8_t led_can_switch;
-  
-  if (rcfail)
-  {
-    ZERO_OUTPUT;
-    delay(5);
-    return;
-  }
-  
-  /* Activation decision */
-  if (! activated)
-  {
-    ZERO_OUTPUT;
-
-    if ((rc[THROTTLE] >= -20) && (rc[THROTTLE] <= 20))
-      acttick ++;
-    else
-      acttick = 0;
-
-    if (acttick >= 200)
-    {
-      acttick = 0;
-      activated = 1;
-      LED_x = 0xff; /* it's good to light up LED when activated */
-    }
-    delay(10);
-    return;
-  }
-  
-  /* STEP1: Main motors with steering control */
+  /* Main motors with steering control */
   if (rc[THROTTLE] >= 0)
   {
     /* go forward: apply fwd speed to left and right motor */
@@ -241,7 +213,7 @@ void control()
       MR_bck = min(MR_bck * (100 + rc[YAW]) / 100, MR_bck); /* turn right: slow down the right motor */
   }
   
-  /* STEP2: Spin motor */
+  /* Spin motor */
   if (rc[ROLL] >= 0)
   {
     /* spin counter-clock-wise */
@@ -254,20 +226,111 @@ void control()
     SPIN_ccw = ((- rc[ROLL]) >> 1) + ((- rc[ROLL]) << 1);
     SPIN_cw = 0;
   }
+}
+
+void controlmode1()
+{
+  /* Main motors with steering control */
+  if (rc[THROTTLE] >= 0)
+  {
+    /* go forward: apply fwd speed to left and right motor */
+    ML_fwd = (rc[THROTTLE] >> 1) + (rc[THROTTLE] << 1);    
+    MR_fwd = ML_fwd;
+    ML_bck = 0;
+    MR_bck = 0;
+    
+    if (rc[ROLL] > 10)
+      ML_fwd = min(ML_fwd * (100 - rc[ROLL]) / 100, ML_fwd); /* turn left: slow down the left motor */
+    else if (rc[ROLL] < -10)
+      MR_fwd = min(MR_fwd * (100 + rc[ROLL]) / 100, MR_fwd); /* turn right: slow down the right motor */
+  }
+  else
+  {
+    /* go backward: apply bck speed to left and right motor */
+    ML_bck = ((- rc[THROTTLE]) >> 1) + ((- rc[THROTTLE]) << 1);
+    MR_bck = ML_bck;
+    ML_fwd = 0;
+    MR_fwd = 0;
+    
+    if (rc[ROLL] > 10)
+      ML_bck = min(ML_bck * (100 - rc[ROLL]) / 100, ML_bck); /* turn left: slow down the left motor */
+    else if (rc[ROLL] < -10)
+      MR_bck = min(MR_bck * (100 + rc[ROLL]) / 100, MR_bck); /* turn right: slow down the right motor */
+  }
   
-  /* STEP3: Two modes */
+  /* Spin motor */
+  if (rc[YAW] >= 0)
+  {
+    /* spin counter-clock-wise */
+    SPIN_cw = (rc[YAW] >> 1) + (rc[YAW] << 1);    
+    SPIN_ccw = 0;
+  }
+  else
+  {
+    /* spin clock wise */
+    SPIN_ccw = ((- rc[YAW]) >> 1) + ((- rc[YAW]) << 1);
+    SPIN_cw = 0;
+  }
+}
+
+void control()
+{
+  static uint8_t led_can_switch;
+  
+  if (rcfail)
+  {
+    ZERO_OUTPUT;
+    delay(5);
+    return;
+  }
+  
+  /* Activation decision */
+  if (! activated)
+  {
+    ZERO_OUTPUT;
+
+    if ((rc[THROTTLE] >= -20) && (rc[THROTTLE] <= 20))
+      acttick ++;
+    else
+      acttick = 0;
+
+    if (acttick >= 200)
+    {
+      acttick = 0;
+      activated = 1;
+      
+      if ((rc[ROLL] < -80) || (rc[ROLL] > 80))
+        controlmode = 1;
+      else
+        controlmode = 0;
+      
+      LED_x = 0xff; /* it's good to light up LED when activated */
+    }
+    delay(10);
+    return;
+  }
+  
+  /* Movement control, two modes */
+  if (controlmode == 0)
+    controlmode0();
+  else if (controlmode == 1)
+    controlmode1();
+  else
+    controlmode0();  
+  
+  /* Two modes for dig, push and led  */
   if (rc[MODE] > 0)
   {
     /* Mode 1: Pitch controls digging */
     if (rc[PITCH] >= 0)
     {
-      /* spin counter-clock-wise */
+      /* Dig down*/
       DIG_down = (rc[PITCH] >> 1) + (rc[PITCH] << 1);    
       DIG_up = 0;
     }
     else
     {
-      /* spin clock wise */
+      /* Dig up */
       DIG_up = ((- rc[PITCH]) >> 1) + ((- rc[PITCH]) << 1);
       DIG_down = 0;
     }
@@ -277,7 +340,7 @@ void control()
     /* Mode 2: Pitch up to push, pitch down to turn on/off led */
     if (rc[PITCH] >= 0)
     {
-      /* spin counter-clock-wise */
+      /* Push */
       PUSH_fwd = (rc[PITCH] >> 1) + (rc[PITCH] << 1);
     }
     else
